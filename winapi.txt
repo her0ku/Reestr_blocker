@@ -1,0 +1,140 @@
+#undef UNICODE
+
+#pragma comment( linker , "/entry:begin" ) // при вызове линкера будет использован дополнительный параметр
+
+#include <windows.h>
+
+#define IB_SET 101 // помещает файл блокировки в редактор реестра.
+
+#define IB_CLEAR 102 // отчищает значения в фалй блокировки.
+
+#define IB_DELETE 103 // удаляет файл блокировки.
+
+long __stdcall WndProc(HWND, unsigned, unsigned, long); // обратный вызов
+
+WNDCLASS wc = { 0 , WndProc , 0 , 0 ,
+
+0 , 0 , 0 , (HBRUSH)(COLOR_WINDOW + 1) , 0 , "MainWndClass" };
+
+MSG msg; //вывод сообщений
+
+HWND hMainWnd; // дескриптор окна
+
+HKEY hKey;
+
+unsigned i;
+
+void begin()
+
+{
+
+	wc.hInstance = GetModuleHandle(0); // вызываем ресурсы winapi
+
+	wc.hIcon = LoadIcon(0, IDI_APPLICATION);
+
+	wc.hCursor = LoadCursor(0, IDC_ARROW);
+
+	RegisterClass(&wc);
+
+	hMainWnd = CreateWindowEx(WS_EX_CLIENTEDGE, "MainWndClass", "Блокировка редактора реестра", // разметка окна, задаем стандартный стиль онка, размер.
+
+		WS_SYSMENU, 100, 100, 600, 300, 0, 0, wc.hInstance, 0);
+
+	ShowWindow(hMainWnd, 1); //показывать окно пока не выйдут из приложения
+
+	while (GetMessage(&msg, 0, 0, 0) != 0)
+
+	{
+		TranslateMessage(&msg);
+
+		DispatchMessage(&msg);
+
+	}
+
+	ExitProcess(0);
+
+}
+
+long __stdcall WndProc(HWND hWnd, unsigned mes, unsigned wParam, long lParam) // создаем кнопки
+
+{
+	switch (mes)
+
+		/* размечаем кнопки. Тип, название, отношение к главному классу
+
+		"Главный класс это наше окно */
+
+	{
+	case WM_CREATE: CreateWindowEx(0, "BUTTON", "Заблокировать редактор реестра", WS_CHILD | WS_VISIBLE, 30, 10, 500, 30, hWnd, (HMENU)IB_SET, wc.hInstance, 0);
+
+		CreateWindowEx(0, "BUTTON", "Разблокировать редактор реестра", WS_CHILD | WS_VISIBLE,
+
+			30, 45, 500, 30, hWnd, (HMENU)IB_CLEAR, wc.hInstance, 0);
+
+		CreateWindowEx(0, "BUTTON", "Удалить файл блокировки из файла реестра", WS_CHILD | WS_VISIBLE,
+
+			30, 80, 500, 30, hWnd, (HMENU)IB_DELETE, wc.hInstance, 0);
+
+		return 0;
+
+	case WM_COMMAND: RegCreateKeyEx(HKEY_CURRENT_USER,
+
+		"Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
+
+		0, 0, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, 0, &hKey, 0);
+
+		// указываем путь в редакторе реестра, где будет храниться файл для блокировки и разблокировки реестра.
+
+		switch (wParam & 0xffff) // что будет происходить при выборе
+
+		{
+		case IB_SET: i = 1;
+
+			//Set создает файл блокировки с значением ключома 1 и выводит сообщение.
+
+		set:
+
+			RegSetValueEx(hKey, "DisableRegistryTools", 0,
+
+				REG_DWORD, (BYTE*)& i, 4);
+
+			MessageBox(hWnd, "Редактор реестра успешно заблокирован!", "Блокировка", MB_OK);
+
+			break;
+
+		case IB_CLEAR: i = 0;
+
+			//Set1 меняет знаениче файла блокировки с 1 на 0, НО этот файл остается в реестре
+
+		set1:
+
+			RegSetValueEx(hKey, "DisableRegistryTools", 0, REG_DWORD, (BYTE*)& i, 4);
+
+			MessageBox(hWnd, "Временно остановлен!", "Временно отключено", MB_OK);
+
+			break;
+
+		case IB_DELETE:
+
+			// полностью удаляет файл из реестра.
+
+			RegDeleteValue(hKey, "DisableRegistryTools");
+
+			MessageBox(hWnd, "Вы удалили файл блокировки реестра из реестра :D !", "UNLOCK!", MB_OK);
+
+			break;
+
+		}
+
+		RegCloseKey(hKey);
+
+		return 0;
+
+	case WM_DESTROY: PostQuitMessage(0); // при выходе уничтожает приложение
+
+		return 0;
+
+	default: DefWindowProc(hWnd, mes, wParam, lParam);
+
+	}
+}
